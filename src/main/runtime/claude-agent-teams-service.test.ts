@@ -299,6 +299,37 @@ describe('ClaudeAgentTeamsService', () => {
     ).resolves.toMatchObject({ ok: false, exitCode: 1 })
   })
 
+  it('rejects stale or unauthorized it2 calls', async () => {
+    const { service, teamId, api } = createServiceWithLeader()
+
+    await expect(
+      service.handleIt2Compat({ teamId, token: 'wrong', argv: ['session', 'list'] }, api)
+    ).resolves.toMatchObject({
+      ok: false,
+      exitCode: 1,
+      stderr: 'it2: stale or unauthorized agent team\n'
+    })
+  })
+
+  it('adds the it2 shim and iTerm2 session identity to the leader launch env', () => {
+    const service = new ClaudeAgentTeamsService()
+    const launch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle',
+      baseEnv: { PATH: '/usr/bin' },
+      shimDir: '/tmp/orca-shim',
+      shimBin: '/usr/bin/orca',
+      it2: { shimDir: '/tmp/orca-it2-shim', probeShell: '/tmp/orca-it2-shim/sh' }
+    })
+
+    expect(launch.env).toMatchObject({
+      PATH: '/tmp/orca-it2-shim:/tmp/orca-shim:/usr/bin',
+      ITERM_SESSION_ID: 'w0t0p0:orca-1-pane',
+      ORCA_AGENT_TEAMS_IT2_SHIM_DIR: '/tmp/orca-it2-shim',
+      ORCA_AGENT_TEAMS_IT2_PROBE_SHELL: '/tmp/orca-it2-shim/sh'
+    })
+    expect(launch.env.SHELL).toBeUndefined()
+  })
+
   it('keeps the inherited Windows `Path` instead of minting a truncated `PATH`', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
