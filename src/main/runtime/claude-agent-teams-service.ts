@@ -14,6 +14,7 @@ import type {
 export class ClaudeAgentTeamsService {
   private readonly teams = new Map<string, AgentTeam>()
   private readonly dispatcher = new ClaudeAgentTeamsTmuxDispatcher()
+  private teamRemovedListener: ((team: AgentTeam) => void) | null = null
 
   createLaunchEnv(args: {
     leaderHandle: string
@@ -76,8 +77,19 @@ export class ClaudeAgentTeamsService {
     for (const [teamId, team] of this.teams) {
       if (team.leaderHandle === handle) {
         this.teams.delete(teamId)
+        this.teamRemovedListener?.(team)
       }
     }
+  }
+
+  getTeam(teamId: string): AgentTeam | undefined {
+    return this.teams.get(teamId)
+  }
+
+  // Why: lets a lifecycle-bound add-on (e.g. the Telegram bridge) tear itself down
+  // wherever a team is already evicted, instead of every eviction call site knowing about it.
+  setTeamRemovedListener(listener: (team: AgentTeam) => void): void {
+    this.teamRemovedListener = listener
   }
 
   getActiveTeamCount(): number {

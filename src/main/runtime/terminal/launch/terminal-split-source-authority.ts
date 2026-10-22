@@ -4,6 +4,7 @@ import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-id
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
 import type {
+  AgentTeamsTerminalApi,
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
 } from '../../claude-agent-teams-types'
@@ -112,20 +113,25 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
   async handleAgentTeamsTmuxCompat(
     request: AgentTeamsTmuxCompatRequest
   ): Promise<AgentTeamsTmuxCompatResponse> {
-    return await this.claudeAgentTeams.handleTmuxCompat(request, {
+    return await this.claudeAgentTeams.handleTmuxCompat(request, this.buildAgentTeamsTerminalApi())
+  }
+
+  private buildAgentTeamsTerminalApi(): AgentTeamsTerminalApi {
+    return {
       splitTerminal: (handle, opts) => this.splitTerminal(handle, opts),
       readTerminal: (handle, opts) => this.readTerminal(handle, opts),
       sendTerminal: (handle, action, options) => this.sendTerminal(handle, action, options),
       focusTerminal: (handle) => this.focusTerminal(handle),
       closeTerminal: (handle) => this.closeTerminal(handle),
       showTerminal: (handle) => this.showTerminal(handle)
-    })
+    }
   }
 
   async prepareClaudeAgentTeamsLeader(args: {
     paneKey: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
+    telegramBridge?: { token: string; chatId: string }
   }): Promise<{ env: Record<string, string> }> {
     const handle = this.getTerminalHandleForPaneKey(args.paneKey)
     if (!handle) {
@@ -134,7 +140,8 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     return await this.prepareClaudeAgentTeamsLeaderForHandle({
       handle,
       baseEnv: args.baseEnv,
-      prepareAuth: args.prepareAuth
+      prepareAuth: args.prepareAuth,
+      telegramBridge: args.telegramBridge
     })
   }
 
@@ -142,6 +149,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     handle: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
+    telegramBridge?: { token: string; chatId: string }
   }): Promise<{ env: Record<string, string>; envToDelete?: string[] }> {
     const baseEnv = {
       ...process.env,
@@ -159,6 +167,16 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
       shimDir,
       shimBin
     })
+    if (args.telegramBridge) {
+      const team = this.claudeAgentTeams.getTeam(launch.teamId)
+      if (team) {
+        this.claudeAgentTeamsTelegramBridge.start(
+          team,
+          this.buildAgentTeamsTerminalApi(),
+          args.telegramBridge
+        )
+      }
+    }
     const env = auth ? { ...auth.envPatch, ...launch.env } : launch.env
     return { env }
   }

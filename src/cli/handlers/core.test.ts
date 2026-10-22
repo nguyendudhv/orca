@@ -44,17 +44,19 @@ describe('orca claude-teams CLI handler', () => {
   let previousRunAsNode: string | undefined
   let previousPaneKey: string | undefined
   let previousExitCode: typeof process.exitCode
+  let previousBotToken: string | undefined
+  let previousChatId: string | undefined
 
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
 
-  function runClaudeTeams(): Promise<void> {
+  function runClaudeTeams(rawArgs: string[] = []): Promise<void> {
     const ctx: HandlerContext = {
       flags: new Map(),
       client,
       cwd: '/tmp/repo',
       json: false,
-      rawArgs: []
+      rawArgs
     }
     return CORE_HANDLERS['claude-teams'](ctx)
   }
@@ -71,10 +73,14 @@ describe('orca claude-teams CLI handler', () => {
     previousRunAsNode = process.env.ELECTRON_RUN_AS_NODE
     previousPaneKey = process.env.ORCA_PANE_KEY
     previousExitCode = process.exitCode
+    previousBotToken = process.env.TELEGRAM_BOT_TOKEN
+    previousChatId = process.env.TELEGRAM_CHAT_ID
     // The `orca` launcher runs Orca's Electron binary as Node, so the CLI process
     // itself carries ELECTRON_RUN_AS_NODE=1. Reproduce that inherited flag here.
     process.env.ELECTRON_RUN_AS_NODE = '1'
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    delete process.env.TELEGRAM_BOT_TOKEN
+    delete process.env.TELEGRAM_CHAT_ID
   })
 
   afterEach(() => {
@@ -87,6 +93,16 @@ describe('orca claude-teams CLI handler', () => {
       delete process.env.ORCA_PANE_KEY
     } else {
       process.env.ORCA_PANE_KEY = previousPaneKey
+    }
+    if (previousBotToken === undefined) {
+      delete process.env.TELEGRAM_BOT_TOKEN
+    } else {
+      process.env.TELEGRAM_BOT_TOKEN = previousBotToken
+    }
+    if (previousChatId === undefined) {
+      delete process.env.TELEGRAM_CHAT_ID
+    } else {
+      process.env.TELEGRAM_CHAT_ID = previousChatId
     }
     process.exitCode = previousExitCode
   })
@@ -176,4 +192,50 @@ describe('orca claude-teams CLI handler', () => {
     const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
     expect(spawnEnv.ANTHROPIC_API_KEY).toBe('sk-ant-system')
   })
+
+  it.skipIf(isWindows)(
+    'sends telegram bridge credentials and strips --telegram-bridge before spawning claude',
+    async () => {
+      process.env.TELEGRAM_BOT_TOKEN = 'bot-token-123'
+      process.env.TELEGRAM_CHAT_ID = '555'
+
+      await runClaudeTeams(['--telegram-bridge', '--resume', 'abc'])
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked client.call only ever receives the prepareLaunch params this handler builds.
+      const prepareLaunchParams = callMock.mock.calls[0][1] as {
+        telegramBridge?: { token: string; chatId: string }
+      }
+      expect(prepareLaunchParams.telegramBridge).toEqual({ token: 'bot-token-123', chatId: '555' })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spawnMock is only ever called with the claude argv array built by this handler.
+      const claudeArgs = spawnMock.mock.calls.at(-1)?.[1] as string[]
+      expect(claudeArgs).not.toContain('--telegram-bridge')
+      expect(claudeArgs).toEqual(expect.arrayContaining(['--resume', 'abc']))
+    }
+  )
+
+  it.skipIf(isWindows)(
+    'fails fast without spawning claude when telegram env vars are missing',
+    async () => {
+      await expect(runClaudeTeams(['--telegram-bridge'])).rejects.toThrow(
+        /TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID/
+      )
+
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.skipIf(isWindows)(
+    'omits telegramBridge from the RPC call when the flag is absent',
+    async () => {
+      process.env.TELEGRAM_BOT_TOKEN = 'bot-token-123'
+      process.env.TELEGRAM_CHAT_ID = '555'
+
+      await runClaudeTeams()
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked client.call only ever receives the prepareLaunch params this handler builds.
+      const prepareLaunchParams = callMock.mock.calls[0][1] as Record<string, unknown>
+      expect(prepareLaunchParams.telegramBridge).toBeUndefined()
+    }
+  )
 })

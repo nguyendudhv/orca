@@ -31,13 +31,18 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['claude-teams'],
     argumentMode: 'passthrough',
     summary: 'Start Claude Code Agent Teams in the current Orca terminal',
-    usage: 'orca claude-teams [claude args...]',
+    usage: 'orca claude-teams [--telegram-bridge] [claude args...]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
       'Passes all following arguments through to Claude Code after enabling Agent Teams native panes.',
-      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.'
+      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.',
+      '--telegram-bridge mirrors a chosen team pane into a Telegram chat and relays replies back as pane input, alongside the normal splits (not a replacement for them). Requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in the environment; fails fast if either is missing. In the chat: /panes lists panes, /watch <paneId> switches the mirrored pane, any other message is sent as input to the currently watched pane.'
     ],
-    examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
+    examples: [
+      'orca claude-teams',
+      'orca claude-teams --resume <session-id>',
+      'orca claude-teams --telegram-bridge'
+    ]
   },
   ...REPO_COMMAND_SPECS,
   {

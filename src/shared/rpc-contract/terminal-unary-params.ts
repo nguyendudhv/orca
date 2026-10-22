@@ -300,5 +300,12 @@ export const AgentTeamsTmuxCompat = z.object({
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
   env: z.record(z.string(), z.string()).optional(),
-  prepareAuth: z.boolean().optional()
+  prepareAuth: z.boolean().optional(),
+  // Mirrors a chosen team pane into a Telegram chat; absent means the launch runs without a bridge.
+  telegramBridge: z
+    .object({
+      token: requiredString('Missing Telegram bot token'),
+      chatId: requiredString('Missing Telegram chat ID')
+    })
+    .optional()
 })

@@ -29,6 +29,25 @@ function withTeammateModeAuto(args: string[]): string[] {
   return ['--teammate-mode', 'auto', ...args]
 }
 
+// Why: `--telegram-bridge` is an Orca-only flag; `claude` must never see it, unlike
+// `--teammate-mode` which is a real claude flag passed through unmodified.
+function requestsTelegramBridge(args: string[]): { requested: boolean; rawArgs: string[] } {
+  const filtered = args.filter((arg) => arg !== '--telegram-bridge')
+  return { requested: filtered.length !== args.length, rawArgs: filtered }
+}
+
+function resolveTelegramBridgeCredentials(): { token: string; chatId: string } {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim()
+  if (!token || !chatId) {
+    throw new RuntimeClientError(
+      'invalid_environment',
+      '--telegram-bridge requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to be set.'
+    )
+  }
+  return { token, chatId }
+}
+
 async function runClaudeAgentTeams(env: Record<string, string>, args: string[]): Promise<number> {
   return await new Promise((resolve, reject) => {
     const child = spawn('claude', withTeammateModeAuto(args), {
@@ -61,13 +80,18 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         'orca claude-teams must be run inside an Orca terminal.'
       )
     }
+    const { requested: telegramBridgeRequested, rawArgs: claudeArgs } = requestsTelegramBridge(
+      rawArgs ?? []
+    )
+    const telegramBridge = telegramBridgeRequested ? resolveTelegramBridgeCredentials() : undefined
     const inheritedEnv = envRecord()
     const response = await client.call<{
       launch: { env: Record<string, string>; envToDelete?: string[] }
     }>('agentTeams.prepareLaunch', {
       paneKey,
       env: inheritedEnv,
-      prepareAuth: true
+      prepareAuth: true,
+      ...(telegramBridge ? { telegramBridge } : {})
     })
     for (const key of response.result.launch.envToDelete ?? []) {
       delete inheritedEnv[key]
@@ -77,7 +101,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...inheritedEnv,
         ...response.result.launch.env
       },
-      rawArgs ?? []
+      claudeArgs
     )
   },
   open: async ({ client, json }) => {

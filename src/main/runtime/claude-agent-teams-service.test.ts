@@ -299,6 +299,31 @@ describe('ClaudeAgentTeamsService', () => {
     ).resolves.toMatchObject({ ok: false, exitCode: 1 })
   })
 
+  it('getTeam returns the team created by createLaunchEnv', () => {
+    const { service, teamId, leaderPane } = createServiceWithLeader()
+
+    expect(service.getTeam(teamId)).toMatchObject({ teamId, leaderPane })
+    expect(service.getTeam('missing-team')).toBeUndefined()
+  })
+
+  it('notifies the removed-team listener only for the evicted team', () => {
+    const { service, teamId: teamOneId } = createServiceWithLeader()
+    const teamTwoLaunch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle-2',
+      baseEnv: { PATH: '/usr/bin' },
+      shimDir: '/tmp/orca-shim',
+      shimBin: '/usr/bin/orca'
+    })
+    const removed: string[] = []
+    service.setTeamRemovedListener((team) => removed.push(team.teamId))
+
+    service.removeTeamForLeaderHandle('leader-handle-2')
+
+    expect(removed).toEqual([teamTwoLaunch.teamId])
+    expect(service.getTeam(teamOneId)).toBeDefined()
+    expect(service.getTeam(teamTwoLaunch.teamId)).toBeUndefined()
+  })
+
   it('keeps the inherited Windows `Path` instead of minting a truncated `PATH`', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
