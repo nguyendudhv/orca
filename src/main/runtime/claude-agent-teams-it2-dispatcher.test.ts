@@ -1,3 +1,4 @@
+import { delimiter } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import type { AgentTeamsTerminalApi } from './claude-agent-teams-types'
@@ -115,7 +116,7 @@ describe('ClaudeAgentTeamsIt2Dispatcher', () => {
     await it2('session', 'split', '-v')
 
     const teammateEnv = vi.mocked(api.splitTerminal).mock.calls[0]?.[1].env
-    expect(teammateEnv?.PATH).toBe('/tmp/orca-shim:/usr/bin')
+    expect(teammateEnv?.PATH).toBe(`/tmp/orca-shim${delimiter}/usr/bin`)
     expect(teammateEnv).not.toHaveProperty('ITERM_SESSION_ID')
     expect(teammateEnv).not.toHaveProperty('ORCA_AGENT_TEAMS_IT2_SHIM_DIR')
     expect(teammateEnv).not.toHaveProperty('ORCA_AGENT_TEAMS_IT2_PROBE_SHELL')

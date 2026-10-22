@@ -1,3 +1,4 @@
+import { delimiter } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import type { AgentTeamsTerminalApi } from './claude-agent-teams-types'
@@ -322,7 +323,7 @@ describe('ClaudeAgentTeamsService', () => {
     })
 
     expect(launch.env).toMatchObject({
-      PATH: '/tmp/orca-it2-shim:/tmp/orca-shim:/usr/bin',
+      PATH: ['/tmp/orca-it2-shim', '/tmp/orca-shim', '/usr/bin'].join(delimiter),
       ITERM_SESSION_ID: 'w0t0p0:orca-1-pane',
       ORCA_AGENT_TEAMS_IT2_SHIM_DIR: '/tmp/orca-it2-shim',
       ORCA_AGENT_TEAMS_IT2_PROBE_SHELL: '/tmp/orca-it2-shim/sh'
